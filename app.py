@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urljoin
 from flask import Flask, Response, request
 import requests
 
@@ -6,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "SonyLIV Smart Proxy Server is Running!"
+    return "SonyLIV Advanced Proxy is Running!"
 
 @app.route('/proxy')
 def proxy_stream():
@@ -20,28 +21,27 @@ def proxy_stream():
     }
 
     try:
-        # যদি লিংকটি m3u বা m3u8 প্লেলিস্ট হয়, তবে প্রসেস করে পাঠাবে
-        if target_url.endswith('.m3u') or target_url.endswith('.m3u8'):
+        # যদি ফাইলটি .m3u8 বা প্লেলিস্ট হয়
+        if '.m3u8' in target_url or target_url.endswith('.m3u'):
             res = requests.get(target_url, headers=headers, timeout=15)
             content = res.text
-            
-            # সার্ভারের বেস ইউরল বের করা
             base_proxy_url = request.host_url.rstrip('/') + '/proxy?url='
             
-            # এমথ্রিইউ ফাইলের লাইনগুলো চেক করে স্ট্রিম লিংকের সাথে প্রক্সি যুক্ত করা
             new_lines = []
             for line in content.splitlines():
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    # যদি লিংকে ইতিমধ্যে প্রক্সি না থাকে
+                    # রিলেটিভ লিঙ্কগুলোকে পূর্ণাঙ্গ লিঙ্কে রূপান্তর করা
+                    if not line.startswith('http'):
+                        line = urljoin(target_url, line)
                     if 'proxy?url=' not in line:
                         line = base_proxy_url + line
                 new_lines.append(line)
             
             updated_playlist = '\n'.join(new_lines)
-            return Response(updated_playlist, content_type='audio/x-mpegurl', status=200)
+            return Response(updated_playlist, content_type='application/vnd.apple.mpegurl', status=200)
 
-        # সাধারণ ভিডিও স্ট্রিম হলে সরাসরি প্রক্সি করবে
+        # ভিডিওর টুকরো (.ts বা অন্যান্য ফাইল) হলে প্রক্সি করা
         req = requests.get(target_url, headers=headers, stream=True, timeout=15)
         return Response(
             req.iter_content(chunk_size=1024), 
