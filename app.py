@@ -7,7 +7,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "SonyLIV Advanced Proxy is Running!"
+    return "SonyLIV Live Proxy is Running!"
 
 @app.route('/proxy')
 def proxy_stream():
@@ -21,7 +21,6 @@ def proxy_stream():
     }
 
     try:
-        # যদি ফাইলটি .m3u8 বা প্লেলিস্ট হয়
         if '.m3u8' in target_url or target_url.endswith('.m3u'):
             res = requests.get(target_url, headers=headers, timeout=15)
             content = res.text
@@ -31,7 +30,6 @@ def proxy_stream():
             for line in content.splitlines():
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    # রিলেটিভ লিঙ্কগুলোকে পূর্ণাঙ্গ লিঙ্কে রূপান্তর করা
                     if not line.startswith('http'):
                         line = urljoin(target_url, line)
                     if 'proxy?url=' not in line:
@@ -39,15 +37,23 @@ def proxy_stream():
                 new_lines.append(line)
             
             updated_playlist = '\n'.join(new_lines)
-            return Response(updated_playlist, content_type='application/vnd.apple.mpegurl', status=200)
+            
+            # ক্যাশিং বন্ধ করার জন্য হেডার যুক্ত করা হলো যাতে লাইভ প্লেলিস্ট রিফ্রেশ হতে পারে
+            response = Response(updated_playlist, content_type='application/vnd.apple.mpegurl', status=200)
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            return response
 
-        # ভিডিওর টুকরো (.ts বা অন্যান্য ফাইল) হলে প্রক্সি করা
+        # ভিডিওর টুকরোগুলো (.ts) প্রক্সি করার জন্য
         req = requests.get(target_url, headers=headers, stream=True, timeout=15)
-        return Response(
+        response = Response(
             req.iter_content(chunk_size=1024), 
             content_type=req.headers.get('content-type', 'video/mp2t'),
             status=req.status_code
         )
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        return response
     except Exception as e:
         return str(e), 500
 
